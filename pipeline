@@ -1,6 +1,7 @@
 # Pipeline
 
-# Trimmomatic
+
+# Trimmomatic: denoising
 # Perl script to automate the Trimmomatic command for all files in a folder
 # Make the script executable
 chmod +x my_Make_Trimmomatic.sh
@@ -8,105 +9,62 @@ chmod +x my_Make_Trimmomatic.sh
 # Execute the script
 make_Trimmomatic.pl -d /path_to_Illmina_read_folder -p/path_to_Trimmomatic_application
 
+
 # move paired reads, singe forward reads R1 (reverse read was descarded) and single reverse reads R2 (forward read was descarded) into separate folders
 mv *paired.fastq ./paired
 mv *R1_unpaired.fastq ./unpairedR1
 mv *R2_unpaired.fastq ./unpairedR2
 
-# QIIME
+
+# QIIME: join reads from paired folder
 multiple_join_paired_ends.py -i /path_to_paired_read_folder -o join_paired_ends -p join_paired_ends_parameters.txt
 
-# Perl script to reorganize the data from the output directories of join_paired_ends.py in Qiime, moving paired and unpaired files to separate folders
+
+# Perl script to reorganize the data from the output directories of join_paired_ends.py in Qiime, moving joined and unjoined forward reads to separate folders
+# Make the script executable
+chmod +x make_separate_forSplitlibraries.sh
+./make_separate_forSplitlibraries.sh
+# Execute the script
 make_separate_forSplitlibraries.pl -d /path_to_join_paired_ends_folder
 
-# QIIME
-multiple_split_libraries_fastq.py -i /Users/Camille/Documents/NOTHOFAGUS/illumina/join_paired_ends/joined_fastq  -o split_libraries_join -p split_libraries_parameters.txt --demultiplexing_method sampleid_by_file
 
-# unpaired forwards reads from joined_paired_ends
-multiple_split_libraries_fastq.py -i /Users/Camille/Documents/NOTHOFAGUS/illumina/join_paired_ends/un1_fastq  -o split_libraries_un1 --demultiplexing_method sampleid_by_file --sampleid_indicator .fastq -p split_libraries_parameters.txt
+# QIIME: convert to fasta format
+#joined reads from joined_paired_ends
+multiple_split_libraries_fastq.py -i /path_to_folder_joined_fastq  -o split_libraries_join --demultiplexing_method sampleid_by_file -p split_libraries_parameters.txt 
 
-# single forwards/reverse reads from Trimmomatic
-multiple_split_libraries_fastq.py -i /Users/Camille/Documents/NOTHOFAGUS/ILLUMINA/my_Trimmomatic_OUTPUT/unpairedR2 -o split_libraries_singleR2 --demultiplexing_method sampleid_by_file --sampleid_indicator _unpaired -p split_libraries_parameters.txt
+# unjoined forwards reads from joined_paired_ends
+multiple_split_libraries_fastq.py -i /path_to_folder_un1_fastq  -o split_libraries_un1 --demultiplexing_method sampleid_by_file -p split_libraries_parameters.txt --sampleid_indicator .fastq 
 
-# paired forward reads
-multiple_split_libraries_fastq.py -i data_from_Trimmomatic  -o fasta_file -p split_libraries_parameters.txt --demultiplexing_method sampleid_by_file
+# single forwards reads R1 from Trimmomatic
+multiple_split_libraries_fastq.py -i /path_to_folder_unpairedR1 -o split_libraries_singleR1 --demultiplexing_method sampleid_by_file -p split_libraries_parameters.txt --sampleid_indicator _unpaired 
 
-
-
----------- Merge files from multiple runs
-
-# Rename control samples from run1 or run2
-sed -i '' 's/POS/POS1/g' *.fasta
-sed -i '' 's/NEG/NEG1/g' *.fasta
-sed -i '' 's/NEG/NEG2/g' *.fasta
-sed -i '' 's/POS/POS2/g' *.fasta
-
-# correct errors ;)
-# single1/single2 : change sample names to match with other files
-# correct error in name LV510, LM64
-sed -i '' 's/-D50/_D50/g' *.fasta
-sed -i '' 's/L5100/LV510/g' *.fasta
-sed -i '' 's/LM646/LM64/g' *.fasta
-sed -i '' 's/LM413/LM41/g' *.fasta
-
-# Merge fasta files from run1 and run2 per cathegory [join, un1, single1, single2]
-cat /Users/Camille/Documents/NOTHOFAGUS/illumina/merge_R1R2/corrected/test/Run1_ITSx_un1.fasta  /Users/Camille/Documents/NOTHOFAGUS/illumina/merge_R1R2/corrected/test/Run2_ITSx_singleR1.fasta > merge.singleR1.fasta
-cat /Users/Camille/Documents/NOTHOFAGUS/illumina/merge_R1R2/corrected/test/Run1_ITSx_singleR1.fasta  /Users/Camille/Documents/NOTHOFAGUS/illumina/merge_R1R2/corrected/test/Run2_ITSx_singleR1.fasta > merge.singleR1.fasta
-cat /Users/Camille/Documents/Nothofagus/illumina/Elevation_forward_reads/run1/Run1_ITSx_un1.ITS1.fasta /Users/Camille/Documents/Nothofagus/illumina/Elevation_forward_reads/run2/Run2_ITSx_un1.ITS1.fasta > merge.un1.fasta
+# single reverse reads R2 from Trimmomatic
+multiple_split_libraries_fastq.py -i /path_to_folder_unpairedR2 -o split_libraries_singleR2 --demultiplexing_method sampleid_by_file -p split_libraries_parameters.txt --sampleid_indicator _unpaired 
 
 
-
----------- ITS1 exctractor
-
-itsx -i /Users/Camille/Documents/NOTHOFAGUS/illumina/RUN1_seqs_no_chimera_singleR2.fna -o Run1_ITSx_single2 -t F --preserve T --save_regions ITS1 --reset T --graphical --cpu 3 [$NSLOTS]
-
+# QIIME: eliminate reads of size < 150 bp
+# for each read type fasta file
+filter_short_reads.py input_file.fasta > output_file.fasta
 
 
----------- Eliminate reads < 150 bp in size
-
-macqiime
-filter_short_reads.py ITSx_OUTPUT_ITS1.fasta 150 > merge.pairedF.150.fasta
-seq_length.py merge.join.150bp.fasta # check
-wc -l filename # check: count how many line in a file
-
-filter_short_reads.py ITSx_OUTPUT_ITS1.fasta 150 > forward_reads_size150.fasta
+# QIIME: eliminate potential chimeric sequences
+# for each read type fasta file
+identify_chimeric_seqs.py -i input_file.fasta -o output_file.fasta -m usearch61 --non_chimeras_retention intersection -r /path_to_UNITE_dynamic_ITS_reference_database.fna
+filter_fasta.py -f input_file.fasta -s output_file.fasta/chimeras.txt -o output_file.nochimera.fasta -n
 
 
+# ITSx: filter non-ITS and non-fungal reads
+# for each read type fasta file
+itsx -i /path_to_output_file.nochimera.fasta -o ITSx_output_file -t F --preserve T --save_regions ITS1 --reset T --graphical
 
 
-
----------- Eliminate potential chimeric sequences
-
-# usearch61 only de novo: --suppress_usearch61_ref
-# usearch61 only with reference database --suppress_usearch61_denovo
-# non_chimeras_retention: intersection will retain only those sequences that are flagged as non-chimeras from both detection methods [default: union]
-# for each read type:
-
-identify_chimeric_seqs.py -i merge.singleR1.150.fasta -o merge.singleR1.150.chimera/ -m usearch61 --non_chimeras_retention intersection -r /Users/Camille/Documents/NOTHOFAGUS/illumina/UNITE_7.1_refs_qiime/mergeUNITE_blast/ITS1_UNITEdynamic+SSAref_Oct2016.fna
-filter_fasta.py -f merge.singleR1.150.fasta -s merge.singleR1.150.chimera/chimeras.txt -o merge.singleR1.150.nochimera.fasta -n
-
-identify_chimeric_seqs.py -i merge.singleR2.150bp.fasta -o merge.singleR2.150bp_chimera/ -m usearch61 --non_chimeras_retention intersection -r /Users/Camille/Documents/NOTHOFAGUS/illumina/UNITE_7.1_refs_qiime/mergeUNITE_blast/ITS1_UNITEdynamic+SSAref_Oct2016.fna
-filter_fasta.py -f merge.singleR2.150bp.fasta -s merge.singleR2.150bp_chimera/chimeras.txt -o merge.singleR2.150bp.nochimera.fasta -n
+# QIIME: create OTU table
+pick_open_reference_otus.py -m -m sortmerna_sumaclust -i ITSx_output_file_join,ITSx_output_file_un1,ITSx_output_file_singleR1,ITSx_output_file_singleR2 -o output_folder/ --min_otu_size 1 --suppress_align_and_tree -s 0.5 -p pick_otu_parameter97.txt -r /path_to_UNITE_dynamic_ITS_reference_database.fna  -s 0.1  -p /path_to_UNITE_dynamic_ITS_reference_parameter.txt
 
 
----------- Cluster sequences into OTUs and create OTU table
-
-# merge ITS from specimens with UNITE (no singleton or singletons)
-# de novo 97% similarity with usearch61
-# taxonomy assignment at 90% simiarity with blast
-pick_open_reference_otus.py -m usearch61 -i /Users/Camille/Documents/NOTHOFAGUS/illumina/UNITE_7.1_refs_qiime/ITSxconcat_SSAref_20161003.fasta -r /Users/Camille/Documents/NOTHOFAGUS/illumina/UNITE_7.1_refs_qiime/sh_qiime_release_22/sh_refs_qiime_ver7_dynamic_22.08.2016.fasta -o mergeUNITE_s_blast/ -s 0.1 --suppress_align_and_tree -p /Users/Camille/Documents/NOTHOFAGUS/illumina/UNITE_7.1_refs_qiime/parameter.txt --min_otu_size 1
-
-
-# unite+specimens ref database as centroid sequences in first step, then de novo
-# assign taxonomy using blast against unite ref database
-# minimum OTU size: 1 sequence per OTU (keep singletons)
-# read both forwards and reverse strands [pick_otus:enable_rev_strand_match True, in parameter file]
-# usearch61 and sortmerna
-# full ITS and ITSconcat: doesn't change
-# threshold at 97% [95% seemed better after SSU removed but 97% better for comparisons; 95% calibrate better from mock community, but 97% equaly good after filtering]
 pick_open_reference_otus.py -m sortmerna_sumaclust -i merge.join.150bp.nochimera.fasta,merge.un1.150bp.nochimera.fasta,merge.singleR1.150bp.nochimera.fasta,merge.singleR2.150bp.nochimera.fasta -o pick_OTU_97_sortmerna/ --min_otu_size 1 --suppress_align_and_tree -s 0.5 -p pick_otu_parameter97.txt --new_ref_set_id soilTDF -r /Users/Camille/Documents/NOTHOFAGUS/illumina/UNITE_7.1_refs_qiime/mergeUNITE_blast/ITS1_UNITEdynamic+SSAref_Oct2016.fna
 
-pick_open_reference_otus.py -m sortmerna_sumaclust -i paired_forward_150_nochimera.fasta,merge.un1.150_nochimera.fasta,merge.singleR1.150_nochimera.fasta -o pick_OTU_97_sortmerna/ --min_otu_size 1 --suppress_align_and_tree -s 0.5 -p pick_otu_parameter97.txt -r /Users/Camille/Dropbox/Illumina_protocols_Nothofagus_metagenomics/ITSconcat_refs_UNITEdynamic+SSA_Dec2016.fna
+ --min_otu_size 1 --suppress_align_and_tree -s 0.5 -p pick_otu_parameter97.txt -r /Users/Camille/Dropbox/Illumina_protocols_Nothofagus_metagenomics/ITSconcat_refs_UNITEdynamic+SSA_Dec2016.fna
 
 
 
