@@ -58,13 +58,8 @@ filter_fasta.py -f input_file.fasta -s output_file.fasta/chimeras.txt -o output_
 itsx -i /path_to_output_file.nochimera.fasta -o ITSx_output_file -t F --preserve T --save_regions ITS1 --reset T --graphical
 
 
-# QIIME: create OTU table
-pick_open_reference_otus.py -m -m sortmerna_sumaclust -i ITSx_output_file_join,ITSx_output_file_un1,ITSx_output_file_singleR1,ITSx_output_file_singleR2 -o output_folder/ --min_otu_size 1 --suppress_align_and_tree -s 0.5 -p pick_otu_parameter97.txt -r /path_to_UNITE_dynamic_ITS_reference_database.fna  -s 0.1  -p /path_to_UNITE_dynamic_ITS_reference_parameter.txt
-
-
-pick_open_reference_otus.py -m sortmerna_sumaclust -i merge.join.150bp.nochimera.fasta,merge.un1.150bp.nochimera.fasta,merge.singleR1.150bp.nochimera.fasta,merge.singleR2.150bp.nochimera.fasta -o pick_OTU_97_sortmerna/ --min_otu_size 1 --suppress_align_and_tree -s 0.5 -p pick_otu_parameter97.txt --new_ref_set_id soilTDF -r /Users/Camille/Documents/NOTHOFAGUS/illumina/UNITE_7.1_refs_qiime/mergeUNITE_blast/ITS1_UNITEdynamic+SSAref_Oct2016.fna
-
- --min_otu_size 1 --suppress_align_and_tree -s 0.5 -p pick_otu_parameter97.txt -r /Users/Camille/Dropbox/Illumina_protocols_Nothofagus_metagenomics/ITSconcat_refs_UNITEdynamic+SSA_Dec2016.fna
+# QIIME: create OTU table by merging all read type fasta files
+pick_open_reference_otus.py -m -m sortmerna_sumaclust -i ITSx_output_file_join,ITSx_output_file_un1,ITSx_output_file_singleR1,ITSx_output_file_singleR2 -o output_folder/ -p pick_otu_parameter.txt -s 0.5 --min_otu_size 1 --suppress_align_and_tree --new_ref_set_id name_of_new_sequence_reference_database  -r /path_to_custom/UNITE_sequence_reference_database.fna
 
 
 
