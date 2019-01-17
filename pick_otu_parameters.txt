@@ -1,0 +1,9 @@
+assign_taxonomy:assignment_method blast
+assign_taxonomy:reference_seqs_fp /path_to_reference_sequence_data.fna
+assign_taxonomy:id_to_taxonomy_fp /path_to_reference_taxonomic_data.txt
+assign_taxonomy:blast_e_value 0.1
+pick_otus:enable_rev_strand_match True
+pick_otus:similarity 0.97
+pick_otus:perc_id_blast 0.90
+
+
