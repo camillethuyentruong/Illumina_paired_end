@@ -1,31 +1,25 @@
 # Pipeline
 
 # Trimmomatic
-# Perl script to automate the trimmomatic command for all files in a folder
+# Perl script to automate the Trimmomatic command for all files in a folder
 # Make the script executable
 chmod +x my_Make_Trimmomatic.sh
 ./my_Make_Trimmomatic.sh
 # Execute the script
 make_Trimmomatic.pl -d /path_to_Illmina_read_folder -p/path_to_Trimmomatic_application
 
-# move paired reads, unpaired reads, singe forward reads R1 and single reverse reads R2 into separate folders
+# move paired reads, singe forward reads R1 (reverse read was descarded) and single reverse reads R2 (forward read was descarded) into separate folders
+mv *paired.fastq ./paired
 mv *R1_unpaired.fastq ./unpairedR1
 mv *R2_unpaired.fastq ./unpairedR2
 
 # QIIME
-multiple_join_paired_ends.py -i /path_to_paired_read_folder/paired -o join_paired_ends -p join_paired_ends_parameters.txt
+multiple_join_paired_ends.py -i /path_to_paired_read_folder -o join_paired_ends -p join_paired_ends_parameters.txt
 
-# Perl script to reorganize the data from the output directories of join_paired_ends.py in the Qiime suite, moving paired and unpaired files to separate folders
+# Perl script to reorganize the data from the output directories of join_paired_ends.py in Qiime, moving paired and unpaired files to separate folders
 make_separate_forSplitlibraries.pl -d /path_to_join_paired_ends_folder
 
-
-
----------- Convert in fasta format
-
-cd /Users/Camille/Documents/Nothofagus/illumina/POS_fastq-join_joined #path to contig folder
-split_libraries_fastq.py -i fastqjoin.join.fastq --sample_ids POS -o fasta_joined/ -q 3 -r 8 --barcode_type 'not-barcoded'
-
-# Idem for for all paired files from join_paired_ends
+# QIIME
 multiple_split_libraries_fastq.py -i /Users/Camille/Documents/NOTHOFAGUS/illumina/join_paired_ends/joined_fastq  -o split_libraries_join -p split_libraries_parameters.txt --demultiplexing_method sampleid_by_file
 
 # unpaired forwards reads from joined_paired_ends
