@@ -59,108 +59,12 @@ itsx -i /path_to_output_file.nochimera.fasta -o ITSx_output_file -t F --preserve
 
 
 # QIIME: create OTU table by merging all read type fasta files
-pick_open_reference_otus.py -m -m sortmerna_sumaclust -i ITSx_output_file_join,ITSx_output_file_un1,ITSx_output_file_singleR1,ITSx_output_file_singleR2 -o output_folder/ -p pick_otu_parameter.txt -s 0.5 --min_otu_size 1 --suppress_align_and_tree --new_ref_set_id name_of_new_sequence_reference_database  -r /path_to_custom/UNITE_sequence_reference_database.fna
+pick_open_reference_otus.py -m -m sortmerna_sumaclust -i ITSx_output_file_join,ITSx_output_file_un1,ITSx_output_file_singleR1,ITSx_output_file_singleR2 -o output_folder/ -p pick_otu_parameters.txt -s 0.5 --min_otu_size 1 --suppress_align_and_tree --new_ref_set_id name_of_new_sequence_reference_database  -r /path_to_custom/UNITE_sequence_reference_database.fna
 
 
-
-
----------- Clean OTU table and filter samples/reads
-
-# count number of OTU/reads per samples
-biom summarize-table -i otu_table_mc1_w_tax.biom -o sumarize_biom_read
-biom summarize-table -i otu_table_mc1_w_tax.biom -o sumarize_biom_OTU --qualitative
-
-# check samples retrieved from mock community
-# convert biom table to tab
-biom convert -i otu_table_mc1_w_tax.biom -o otu_table_mc1_w_tax.txt --to-tsv --header-key taxonomy
-
-# separate by run and convert to txt
-filter_samples_from_otu_table.py -i otu_table_mc1_w_tax.biom -o otu_table_mc1_w_tax_run1.biom -m /Users/Camille/Documents/NOTHOFAGUS/illumina/MappingFile.txt -s 'Description:*,!Run2'
-filter_samples_from_otu_table.py -i otu_table_mc1_w_tax.biom -o otu_table_mc1_w_tax_run2.biom -m /Users/Camille/Documents/NOTHOFAGUS/illumina/MappingFile.txt -s 'Description:*,!Run1'
-
-biom convert -i otu_table_mc1_w_tax_run1.biom -o otu_table_mc1_w_tax_run1.txt --to-tsv --header-key taxonomy
-biom convert -i otu_table_mc1_w_tax_run2.biom -o otu_table_mc1_w_tax_run2.txt --to-tsv --header-key taxonomy
-
-# In Excel: eliminate reads from NEG in each sample with formula: =MAX(0,SAMPLE-NEG)
-
-# convert back to biom 
-# merge the two runs again
-# convert back to txt
-biom convert -i otu_table_mc1_w_tax_run1_NONEG.txt -o otu_table_mc1_w_tax_run1_NONEG.biom --to-hdf5 --table-type="OTU table" --process-obs-metadata taxonomy
-biom convert -i otu_table_mc1_w_tax_run2_NONEG.txt -o otu_table_mc1_w_tax_run2_NONEG.biom --to-hdf5 --table-type="OTU table" --process-obs-metadata taxonomy
-merge_otu_tables.py -i otu_table_mc1_w_tax_run1_NONEG.biom,otu_table_mc1_w_tax_run2_NONEG.biom -o otu_table_mc1_w_tax_NONEG.biom
-biom convert -i otu_table_mc1_w_tax_NONEG.biom -o otu_table_mc1_w_tax_NONEG.txt --to-tsv --header-key taxonomy
-
-# Eliminate reads > 0.05% (threshold based on POS sample) in each sample – Script from Alija
-# BIOM_filter_by_sample.pl -t 0.0005 -c otu_table_mc1_w_tax.txt
-# (In Excel: IF formula)
-
-# convert back to biom
-biom convert -i otu_table_mc1_w_tax_NONEG_FilteredbySample_0.0005.csv -o otu_table_mc1_FilteredbySample_0.0005.biom --to-hdf5 --table-type="OTU table" --process-obs-metadata taxonomy
-
-# Eliminate POS and NEG samples
-filter_samples_from_otu_table.py -i otu_table_mc1_FilteredbySample_0.0005.biom -o otu_table_mc1_w_tax_NOCONTROL.biom -m /Users/Camille/Documents/NOTHOFAGUS/illumina/MappingFile.txt -s 'Control:*,!Control'
-
-# Eliminate OTUs with 0 observations
-filter_otus_from_otu_table.py -i otu_table_mc1_w_tax_NOCONTROL.biom -o otu_table_mc1_w_tax_FILTERED.biom -n 1
-
-
-
----------- Redo taxonomy assignment
-
-# problem with length variation between read and reference? use ITS1 reference doesn't help
-# change -e (blast e value from default 0.001 to 0.05): Typically, E < .05 is required to be considered significant
-# similarity 0.9 (default) cannot be changed with blast, only sortmerna
-# Tax assignment of Sanger seq added to reference taxonomy file
-assign_taxonomy.py -m blast -e 0.05 -o blast.05_taxonomy -i rep_set_FILTERED.fna -r /Users/Camille/Dropbox/Illumina_protocols_Nothofagus_metagenomics/ITSconcat_refs_UNITEdynamic+SSA_Dec2016.fna -t /Users/Camille/Dropbox/Illumina_protocols_Nothofagus_metagenomics/ITSconcat_taxo_UNITEdynamic+SSA_Dec2016.txt
-
-
-
----------- Correct taxonomy assignment
-
-# rep_set_FILTERED.fna blasted on PlutoF platform + manual blast on NCBI in case
-# eliminate OTU when blast region < 100 bp or fragments of various things (potential chimeras)
-# manual assignment genus: 95%, family: 90%, order: 80%
-# elminate non-fungal OTU (Cercozoa)
-
-# Filter eliminated OTUs from ref_seq 
-filter_fasta.py -f rep_set.fna -o rep_set_taxonomy_corrected.fna -s OTU_list_taxonomy_corrected.txt
-
-
-
----------- Additional filtering
-
-# convert back to biom
-biom convert -i otu_table_mc1_w_tax_taxonomy_corrected.txt -o otu_table_mc1_w_tax_taxonomy_corrected.biom --to-hdf5 --table-type="OTU table" --process-obs-metadata taxonomy
-
-# filter per study type
-filter_samples_from_otu_table.py -i otu_table_mc1_w_tax_taxonomy_corrected.biom -o otu_table_ForestType.biom -m /Users/Camille/Documents/NOTHOFAGUS/R/mapping_phyloseq.txt -s 'ForestType:*,!N.A.'
-filter_samples_from_otu_table.py -i otu_table_mc1_w_tax_taxonomy_corrected.biom -o otu_table_Elevation.biom -m /Users/Camille/Documents/NOTHOFAGUS/R/mapping_phyloseq.txt -s 'Elevation:*,!N.A.'
-filter_samples_from_otu_table.py -i otu_table_Elevation.biom -o otu_table_Elevation2.biom -m /Users/Camille/Documents/NOTHOFAGUS/R/mapping_phyloseq.txt -s 'Mix:*,!mix'
-
-# Eliminate OTUs with 0 observations
-filter_otus_from_otu_table.py -i otu_table_ForestType.biom -o otu_table_ForestType_mc1.biom -s 1
-filter_otus_from_otu_table.py -i otu_table_Elevation.biom -o otu_table_Elevation_mc1.biom -s 1
-filter_otus_from_otu_table.py -i otu_table_Elevation2.biom -o otu_table_Elevation2_mc1.biom -s 1
-
-# Eliminate OTUs present in only one sample
-# -s the minimum number of samples an OTU must be observed in for that otu to be retained [default: 0]
-filter_otus_from_otu_table.py -i otu_table_ForestType.biom -o otu_table_ForestType_mc2.biom -s 2
-filter_otus_from_otu_table.py -i otu_table_Elevation.biom -o otu_table_Elevation_mc2.biom -s 2
-filter_otus_from_otu_table.py -i otu_table_Elevation2.biom -o otu_table_Elevation2_mc2.biom -s 2
-
-# convert to txt
-biom convert -i otu_table_Elevation_mc1.biom -o otu_table_Elevation_mc1.txt --to-tsv --header-key taxonomy
-biom convert -i otu_table_Elevation_mc2.biom -o otu_table_Elevation_mc2.txt --to-tsv --header-key taxonomy
-
-
-[should not be necessary if the above is well done]
-# Eliminate OTUs with less than 100 reads
-# -n the minimum total observation count of an otu for that otu to be retained [default: 1]
-filter_otus_from_otu_table.py -i otu_table_mc1_w_tax_FILTERED2.biom -o otu_table_mc1_w_tax_FILTERED3.biom -n 99
-
-# Eliminate OTUs with less than 0.05% of total number of reads
-filter_otus_from_otu_table.py -i otu_table_mc1_w_tax_FILTERED2.biom -o otu_table_mc1_w_tax_FILTERED3.biom --min_count_fraction 0.0005
-
-
-
+# Perl script to filter OTUs from an OTU table (in csv format) based upon a percent threshold of reads per sample [default = 0.05%]
+# Make the script executable
+chmod +x my_BIOM_filter_by_sample.sh
+./my_BIOM_filter_by_sample.sh
+# Execute the script 
+BIOM_filter_by_sample.pl -t 0.0005 -c otu_table.csv
