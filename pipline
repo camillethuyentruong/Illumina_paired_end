@@ -1,0 +1,221 @@
+# Pipeline
+
+# Trimmomatic
+# Perl script to automate the trimmomatic command for all files in a folder [from Alija]
+# Make the script executable
+chmod +x my_Make_Trimmomatic.sh
+./my_Make_Trimmomatic.sh
+# Execute the script
+make_Trimmomatic.pl -d /path_to_Illmina_read_folder -p/path_to_Trimmomatic_application
+
+# move paired reads, unpaired reads, singe forward reads R1 and single reverse reads R2 into separate folders
+mv *R1_unpaired.fastq ./unpairedR1
+
+# QIIME
+join_paired_ends.py -f POS_forward_paired.fq.gz -r POS_reverse_paired.fq.gz -o POS_fastq-join_joined -j 8 -p 10
+
+# Idem for for all paired forwards and reverse files from Trimmomatic [moved into new folder 'paired.fastq']
+multiple_join_paired_ends.py -i /Users/Camille/Documents/NOTHOFAGUS/ILLUMINA/my_Trimmomatic_OUTPUT/paired -o join_paired_ends -p join_paired_ends_parameters.txt
+
+# move paired and unpaired files to separate folders [script from Alija]
+make_separate_forSplitlibraries.pl -d /Users/Camille/Documents/NOTHOFAGUS/illumina/join_paired_ends
+
+
+
+---------- Convert in fasta format
+
+cd /Users/Camille/Documents/Nothofagus/illumina/POS_fastq-join_joined #path to contig folder
+split_libraries_fastq.py -i fastqjoin.join.fastq --sample_ids POS -o fasta_joined/ -q 3 -r 8 --barcode_type 'not-barcoded'
+
+# Idem for for all paired files from join_paired_ends
+multiple_split_libraries_fastq.py -i /Users/Camille/Documents/NOTHOFAGUS/illumina/join_paired_ends/joined_fastq  -o split_libraries_join -p split_libraries_parameters.txt --demultiplexing_method sampleid_by_file
+
+# unpaired forwards reads from joined_paired_ends
+multiple_split_libraries_fastq.py -i /Users/Camille/Documents/NOTHOFAGUS/illumina/join_paired_ends/un1_fastq  -o split_libraries_un1 --demultiplexing_method sampleid_by_file --sampleid_indicator .fastq -p split_libraries_parameters.txt
+
+# single forwards/reverse reads from Trimmomatic
+multiple_split_libraries_fastq.py -i /Users/Camille/Documents/NOTHOFAGUS/ILLUMINA/my_Trimmomatic_OUTPUT/unpairedR2 -o split_libraries_singleR2 --demultiplexing_method sampleid_by_file --sampleid_indicator _unpaired -p split_libraries_parameters.txt
+
+# paired forward reads
+multiple_split_libraries_fastq.py -i data_from_Trimmomatic  -o fasta_file -p split_libraries_parameters.txt --demultiplexing_method sampleid_by_file
+
+
+
+---------- Merge files from multiple runs
+
+# Rename control samples from run1 or run2
+sed -i '' 's/POS/POS1/g' *.fasta
+sed -i '' 's/NEG/NEG1/g' *.fasta
+sed -i '' 's/NEG/NEG2/g' *.fasta
+sed -i '' 's/POS/POS2/g' *.fasta
+
+# correct errors ;)
+# single1/single2 : change sample names to match with other files
+# correct error in name LV510, LM64
+sed -i '' 's/-D50/_D50/g' *.fasta
+sed -i '' 's/L5100/LV510/g' *.fasta
+sed -i '' 's/LM646/LM64/g' *.fasta
+sed -i '' 's/LM413/LM41/g' *.fasta
+
+# Merge fasta files from run1 and run2 per cathegory [join, un1, single1, single2]
+cat /Users/Camille/Documents/NOTHOFAGUS/illumina/merge_R1R2/corrected/test/Run1_ITSx_un1.fasta  /Users/Camille/Documents/NOTHOFAGUS/illumina/merge_R1R2/corrected/test/Run2_ITSx_singleR1.fasta > merge.singleR1.fasta
+cat /Users/Camille/Documents/NOTHOFAGUS/illumina/merge_R1R2/corrected/test/Run1_ITSx_singleR1.fasta  /Users/Camille/Documents/NOTHOFAGUS/illumina/merge_R1R2/corrected/test/Run2_ITSx_singleR1.fasta > merge.singleR1.fasta
+cat /Users/Camille/Documents/Nothofagus/illumina/Elevation_forward_reads/run1/Run1_ITSx_un1.ITS1.fasta /Users/Camille/Documents/Nothofagus/illumina/Elevation_forward_reads/run2/Run2_ITSx_un1.ITS1.fasta > merge.un1.fasta
+
+
+
+---------- ITS1 exctractor
+
+itsx -i /Users/Camille/Documents/NOTHOFAGUS/illumina/RUN1_seqs_no_chimera_singleR2.fna -o Run1_ITSx_single2 -t F --preserve T --save_regions ITS1 --reset T --graphical --cpu 3 [$NSLOTS]
+
+
+
+---------- Eliminate reads < 150 bp in size
+
+macqiime
+filter_short_reads.py ITSx_OUTPUT_ITS1.fasta 150 > merge.pairedF.150.fasta
+seq_length.py merge.join.150bp.fasta # check
+wc -l filename # check: count how many line in a file
+
+filter_short_reads.py ITSx_OUTPUT_ITS1.fasta 150 > forward_reads_size150.fasta
+
+
+
+
+
+---------- Eliminate potential chimeric sequences
+
+# usearch61 only de novo: --suppress_usearch61_ref
+# usearch61 only with reference database --suppress_usearch61_denovo
+# non_chimeras_retention: intersection will retain only those sequences that are flagged as non-chimeras from both detection methods [default: union]
+# for each read type:
+
+identify_chimeric_seqs.py -i merge.singleR1.150.fasta -o merge.singleR1.150.chimera/ -m usearch61 --non_chimeras_retention intersection -r /Users/Camille/Documents/NOTHOFAGUS/illumina/UNITE_7.1_refs_qiime/mergeUNITE_blast/ITS1_UNITEdynamic+SSAref_Oct2016.fna
+filter_fasta.py -f merge.singleR1.150.fasta -s merge.singleR1.150.chimera/chimeras.txt -o merge.singleR1.150.nochimera.fasta -n
+
+identify_chimeric_seqs.py -i merge.singleR2.150bp.fasta -o merge.singleR2.150bp_chimera/ -m usearch61 --non_chimeras_retention intersection -r /Users/Camille/Documents/NOTHOFAGUS/illumina/UNITE_7.1_refs_qiime/mergeUNITE_blast/ITS1_UNITEdynamic+SSAref_Oct2016.fna
+filter_fasta.py -f merge.singleR2.150bp.fasta -s merge.singleR2.150bp_chimera/chimeras.txt -o merge.singleR2.150bp.nochimera.fasta -n
+
+
+---------- Cluster sequences into OTUs and create OTU table
+
+# merge ITS from specimens with UNITE (no singleton or singletons)
+# de novo 97% similarity with usearch61
+# taxonomy assignment at 90% simiarity with blast
+pick_open_reference_otus.py -m usearch61 -i /Users/Camille/Documents/NOTHOFAGUS/illumina/UNITE_7.1_refs_qiime/ITSxconcat_SSAref_20161003.fasta -r /Users/Camille/Documents/NOTHOFAGUS/illumina/UNITE_7.1_refs_qiime/sh_qiime_release_22/sh_refs_qiime_ver7_dynamic_22.08.2016.fasta -o mergeUNITE_s_blast/ -s 0.1 --suppress_align_and_tree -p /Users/Camille/Documents/NOTHOFAGUS/illumina/UNITE_7.1_refs_qiime/parameter.txt --min_otu_size 1
+
+
+# unite+specimens ref database as centroid sequences in first step, then de novo
+# assign taxonomy using blast against unite ref database
+# minimum OTU size: 1 sequence per OTU (keep singletons)
+# read both forwards and reverse strands [pick_otus:enable_rev_strand_match True, in parameter file]
+# usearch61 and sortmerna
+# full ITS and ITSconcat: doesn't change
+# threshold at 97% [95% seemed better after SSU removed but 97% better for comparisons; 95% calibrate better from mock community, but 97% equaly good after filtering]
+pick_open_reference_otus.py -m sortmerna_sumaclust -i merge.join.150bp.nochimera.fasta,merge.un1.150bp.nochimera.fasta,merge.singleR1.150bp.nochimera.fasta,merge.singleR2.150bp.nochimera.fasta -o pick_OTU_97_sortmerna/ --min_otu_size 1 --suppress_align_and_tree -s 0.5 -p pick_otu_parameter97.txt --new_ref_set_id soilTDF -r /Users/Camille/Documents/NOTHOFAGUS/illumina/UNITE_7.1_refs_qiime/mergeUNITE_blast/ITS1_UNITEdynamic+SSAref_Oct2016.fna
+
+pick_open_reference_otus.py -m sortmerna_sumaclust -i paired_forward_150_nochimera.fasta,merge.un1.150_nochimera.fasta,merge.singleR1.150_nochimera.fasta -o pick_OTU_97_sortmerna/ --min_otu_size 1 --suppress_align_and_tree -s 0.5 -p pick_otu_parameter97.txt -r /Users/Camille/Dropbox/Illumina_protocols_Nothofagus_metagenomics/ITSconcat_refs_UNITEdynamic+SSA_Dec2016.fna
+
+
+
+
+---------- Clean OTU table and filter samples/reads
+
+# count number of OTU/reads per samples
+biom summarize-table -i otu_table_mc1_w_tax.biom -o sumarize_biom_read
+biom summarize-table -i otu_table_mc1_w_tax.biom -o sumarize_biom_OTU --qualitative
+
+# check samples retrieved from mock community
+# convert biom table to tab
+biom convert -i otu_table_mc1_w_tax.biom -o otu_table_mc1_w_tax.txt --to-tsv --header-key taxonomy
+
+# separate by run and convert to txt
+filter_samples_from_otu_table.py -i otu_table_mc1_w_tax.biom -o otu_table_mc1_w_tax_run1.biom -m /Users/Camille/Documents/NOTHOFAGUS/illumina/MappingFile.txt -s 'Description:*,!Run2'
+filter_samples_from_otu_table.py -i otu_table_mc1_w_tax.biom -o otu_table_mc1_w_tax_run2.biom -m /Users/Camille/Documents/NOTHOFAGUS/illumina/MappingFile.txt -s 'Description:*,!Run1'
+
+biom convert -i otu_table_mc1_w_tax_run1.biom -o otu_table_mc1_w_tax_run1.txt --to-tsv --header-key taxonomy
+biom convert -i otu_table_mc1_w_tax_run2.biom -o otu_table_mc1_w_tax_run2.txt --to-tsv --header-key taxonomy
+
+# In Excel: eliminate reads from NEG in each sample with formula: =MAX(0,SAMPLE-NEG)
+
+# convert back to biom 
+# merge the two runs again
+# convert back to txt
+biom convert -i otu_table_mc1_w_tax_run1_NONEG.txt -o otu_table_mc1_w_tax_run1_NONEG.biom --to-hdf5 --table-type="OTU table" --process-obs-metadata taxonomy
+biom convert -i otu_table_mc1_w_tax_run2_NONEG.txt -o otu_table_mc1_w_tax_run2_NONEG.biom --to-hdf5 --table-type="OTU table" --process-obs-metadata taxonomy
+merge_otu_tables.py -i otu_table_mc1_w_tax_run1_NONEG.biom,otu_table_mc1_w_tax_run2_NONEG.biom -o otu_table_mc1_w_tax_NONEG.biom
+biom convert -i otu_table_mc1_w_tax_NONEG.biom -o otu_table_mc1_w_tax_NONEG.txt --to-tsv --header-key taxonomy
+
+# Eliminate reads > 0.05% (threshold based on POS sample) in each sample – Script from Alija
+# BIOM_filter_by_sample.pl -t 0.0005 -c otu_table_mc1_w_tax.txt
+# (In Excel: IF formula)
+
+# convert back to biom
+biom convert -i otu_table_mc1_w_tax_NONEG_FilteredbySample_0.0005.csv -o otu_table_mc1_FilteredbySample_0.0005.biom --to-hdf5 --table-type="OTU table" --process-obs-metadata taxonomy
+
+# Eliminate POS and NEG samples
+filter_samples_from_otu_table.py -i otu_table_mc1_FilteredbySample_0.0005.biom -o otu_table_mc1_w_tax_NOCONTROL.biom -m /Users/Camille/Documents/NOTHOFAGUS/illumina/MappingFile.txt -s 'Control:*,!Control'
+
+# Eliminate OTUs with 0 observations
+filter_otus_from_otu_table.py -i otu_table_mc1_w_tax_NOCONTROL.biom -o otu_table_mc1_w_tax_FILTERED.biom -n 1
+
+
+
+---------- Redo taxonomy assignment
+
+# problem with length variation between read and reference? use ITS1 reference doesn't help
+# change -e (blast e value from default 0.001 to 0.05): Typically, E < .05 is required to be considered significant
+# similarity 0.9 (default) cannot be changed with blast, only sortmerna
+# Tax assignment of Sanger seq added to reference taxonomy file
+assign_taxonomy.py -m blast -e 0.05 -o blast.05_taxonomy -i rep_set_FILTERED.fna -r /Users/Camille/Dropbox/Illumina_protocols_Nothofagus_metagenomics/ITSconcat_refs_UNITEdynamic+SSA_Dec2016.fna -t /Users/Camille/Dropbox/Illumina_protocols_Nothofagus_metagenomics/ITSconcat_taxo_UNITEdynamic+SSA_Dec2016.txt
+
+
+
+---------- Correct taxonomy assignment
+
+# rep_set_FILTERED.fna blasted on PlutoF platform + manual blast on NCBI in case
+# eliminate OTU when blast region < 100 bp or fragments of various things (potential chimeras)
+# manual assignment genus: 95%, family: 90%, order: 80%
+# elminate non-fungal OTU (Cercozoa)
+
+# Filter eliminated OTUs from ref_seq 
+filter_fasta.py -f rep_set.fna -o rep_set_taxonomy_corrected.fna -s OTU_list_taxonomy_corrected.txt
+
+
+
+---------- Additional filtering
+
+# convert back to biom
+biom convert -i otu_table_mc1_w_tax_taxonomy_corrected.txt -o otu_table_mc1_w_tax_taxonomy_corrected.biom --to-hdf5 --table-type="OTU table" --process-obs-metadata taxonomy
+
+# filter per study type
+filter_samples_from_otu_table.py -i otu_table_mc1_w_tax_taxonomy_corrected.biom -o otu_table_ForestType.biom -m /Users/Camille/Documents/NOTHOFAGUS/R/mapping_phyloseq.txt -s 'ForestType:*,!N.A.'
+filter_samples_from_otu_table.py -i otu_table_mc1_w_tax_taxonomy_corrected.biom -o otu_table_Elevation.biom -m /Users/Camille/Documents/NOTHOFAGUS/R/mapping_phyloseq.txt -s 'Elevation:*,!N.A.'
+filter_samples_from_otu_table.py -i otu_table_Elevation.biom -o otu_table_Elevation2.biom -m /Users/Camille/Documents/NOTHOFAGUS/R/mapping_phyloseq.txt -s 'Mix:*,!mix'
+
+# Eliminate OTUs with 0 observations
+filter_otus_from_otu_table.py -i otu_table_ForestType.biom -o otu_table_ForestType_mc1.biom -s 1
+filter_otus_from_otu_table.py -i otu_table_Elevation.biom -o otu_table_Elevation_mc1.biom -s 1
+filter_otus_from_otu_table.py -i otu_table_Elevation2.biom -o otu_table_Elevation2_mc1.biom -s 1
+
+# Eliminate OTUs present in only one sample
+# -s the minimum number of samples an OTU must be observed in for that otu to be retained [default: 0]
+filter_otus_from_otu_table.py -i otu_table_ForestType.biom -o otu_table_ForestType_mc2.biom -s 2
+filter_otus_from_otu_table.py -i otu_table_Elevation.biom -o otu_table_Elevation_mc2.biom -s 2
+filter_otus_from_otu_table.py -i otu_table_Elevation2.biom -o otu_table_Elevation2_mc2.biom -s 2
+
+# convert to txt
+biom convert -i otu_table_Elevation_mc1.biom -o otu_table_Elevation_mc1.txt --to-tsv --header-key taxonomy
+biom convert -i otu_table_Elevation_mc2.biom -o otu_table_Elevation_mc2.txt --to-tsv --header-key taxonomy
+
+
+[should not be necessary if the above is well done]
+# Eliminate OTUs with less than 100 reads
+# -n the minimum total observation count of an otu for that otu to be retained [default: 1]
+filter_otus_from_otu_table.py -i otu_table_mc1_w_tax_FILTERED2.biom -o otu_table_mc1_w_tax_FILTERED3.biom -n 99
+
+# Eliminate OTUs with less than 0.05% of total number of reads
+filter_otus_from_otu_table.py -i otu_table_mc1_w_tax_FILTERED2.biom -o otu_table_mc1_w_tax_FILTERED3.biom --min_count_fraction 0.0005
+
+
+
