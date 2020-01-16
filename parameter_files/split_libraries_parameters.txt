@@ -1,0 +1,2 @@
+split_libraries_fastq:rev_comp
+split_libraries_fastq:phred_offset 33
