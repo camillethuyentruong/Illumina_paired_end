@@ -1,5 +1,14 @@
 # Pipeline for denoising and processing Illumina paired-end data by combining paired and unpaired reads
 
+
+#### Programs needed
+[Trimmomatic](http://www.usadellab.org/cms/?page=trimmomatic)
+
+[QIIME](http://qiime.org/)
+
+[ITSx](https://microbiology.se/software/itsx/0)
+
+
 #### Denoising with Trimmomatic
 
 1_make_Trimmomatic.pl: Perl script to automate the Trimmomatic command for all files in a folder
